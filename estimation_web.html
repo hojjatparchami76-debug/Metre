@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+<meta charset="UTF-8">
+<title>برنامه متره و برآورد ابنیه ۱۴۰۴ تحت‌وب</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+body {
+  font-family: 'Tahoma', sans-serif;
+  direction: rtl;
+  margin: 20px;
+  background-color: #f7f9fb;
+  color: #222;
+}
+h1 {
+  text-align: center;
+  margin-bottom: 15px;
+}
+section {
+  margin-bottom: 20px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+label { font-weight: bold; margin-left: 5px; }
+input, button, select {
+  font-family: inherit;
+  padding: 5px 8px;
+  margin-left: 5px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+th {
+  background: #e8edf2;
+}
+.total-bar {
+  font-weight: bold;
+  font-size: 14px;
+  text-align: left;
+  margin-top:8px;
+}
+</style>
+</head>
+<body>
+<h1>برنامه متره و برآورد ابنیه ۱۴۰۴ - نسخه آنلاین</h1>
+
+<section>
+  <label for="fileUpload">📁 بارگذاری فایل اکسل فهرست بها:</label>
+  <input type="file" id="fileUpload" accept=".xlsx" />
+</section>
+
+<section>
+  <label>شماره آیتم:</label>
+  <input type="text" id="itemNo" />
+  <button onclick="searchItem()">جستجو</button>
+  
+  <div id="itemInfo"></div>
+</section>
+
+<section>
+  <label>تعداد:</label>
+  <input type="text" id="count" value="1" oninput="calcQuantity()">
+  <label>طول:</label>
+  <input type="text" id="length" value="1" oninput="calcQuantity()">
+  <label>عرض:</label>
+  <input type="text" id="width" value="1" oninput="calcQuantity()">
+  <label>ارتفاع:</label>
+  <input type="text" id="height" value="1" oninput="calcQuantity()">
+  
+  <label>مقدار دستی:</label>
+  <input type="text" id="manualQuantity" oninput="manualQuantityChange()">
+  <label>مقدار نهایی:</label>
+  <input type="text" id="finalQuantity" readonly value="1.0">
+  <label>توضیحات:</label>
+  <input type="text" id="remarks" style="width:180px">
+  
+  <button onclick="addItem()">➕ افزودن به لیست</button>
+</section>
+
+<section>
+  <table id="itemTable">
+    <thead>
+      <tr>
+        <th>شماره آیتم</th><th>شرح</th><th>واحد</th><th>بهای واحد (ریال)</th>
+        <th>تعداد</th><th>طول</th><th>عرض</th><th>ارتفاع</th>
+        <th>مقدار</th><th>مبلغ کل (ریال)</th><th>توضیحات</th><th>❌</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="total-bar" id="totalBar">جمع کل: 0 ریال</div>
+</section>
+
+<script>
+let boqData = [];
+let currentItem = null;
+let items = [];
+
+function safeEval(expr){
+  try {
+    if(!/^[0-9+\-*/(). ]+$/.test(expr)) throw Error();
+    return eval(expr);
+  } catch { return 1; }
+}
+
+document.getElementById("fileUpload").addEventListener("change", e => {
+  const file = e.target.files[0];
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const data = new Uint8Array(evt.target.result);
+    const workbook = XLSX.read(data, {type: 'array'});
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    boqData = XLSX.utils.sheet_to_json(sheet);
+    alert("فایل فهرست بها بارگذاری شد ✅");
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function searchItem(){
+  const id = document.getElementById("itemNo").value.trim();
+  if(!id){alert("شماره آیتم را وارد کنید");return;}
+  const res = boqData.find(r => String(r['ردیف فهرست']).trim() === id);
+  if(!res){alert("آیتم یافت نشد");return;}
+  currentItem = res;
+  document.getElementById("itemInfo").innerHTML = `
+    <b>شرح:</b> ${res['شرح']} | <b>واحد:</b> ${res['واحد']} | <b>بهای واحد:</b> ${res['بهای واحد (ریال)']}
+  `;
+  calcQuantity();
+}
+
+function calcQuantity(){
+  const c = safeEval(document.getElementById("count").value);
+  const l = safeEval(document.getElementById("length").value);
+  const w = safeEval(document.getElementById("width").value);
+  const h = safeEval(document.getElementById("height").value);
+  const q = c*l*w*h;
+  document.getElementById("finalQuantity").value = q.toFixed(3);
+}
+
+function manualQuantityChange(){
+  const val = document.getElementById("manualQuantity").value;
+  if(val){
+    document.getElementById("finalQuantity").value = safeEval(val).toFixed(3);
+  } else calcQuantity();
+}
+
+function addItem(){
+  if(!currentItem){alert("ابتدا آیتم را جستجو کنید");return;}
+  const qty = parseFloat(document.getElementById("finalQuantity").value);
+  const unitPrice = parseFloat(currentItem['بهای واحد (ریال)']) || 0;
+  const total = unitPrice * qty;
+  
+  const row = {
+    item_no: currentItem['ردیف فهرست'],
+    desc: currentItem['شرح'],
+    unit: currentItem['واحد'],
+    unit_price: unitPrice,
+    count: document.getElementById("count").value,
+    length: document.getElementById("length").value,
+    width: document.getElementById("width").value,
+    height: document.getElementById("height").value,
+    quantity: qty,
+    total_price: total,
+    remarks: document.getElementById("remarks").value
+  };
+  items.push(row);
+  renderTable();
+}
+
+function renderTable(){
+  const tbody = document.querySelector("#itemTable tbody");
+  tbody.innerHTML = "";
+  items.forEach((r, i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.item_no}</td><td>${r.desc}</td><td>${r.unit}</td>
+      <td>${r.unit_price.toLocaleString()}</td>
+      <td contenteditable oninput="updateCell(${i},'count',this.innerText)">${r.count}</td>
+      <td contenteditable oninput="updateCell(${i},'length',this.innerText)">${r.length}</td>
+      <td contenteditable oninput="updateCell(${i},'width',this.innerText)">${r.width}</td>
+      <td contenteditable oninput="updateCell(${i},'height',this.innerText)">${r.height}</td>
+      <td contenteditable oninput="updateCell(${i},'quantity',this.innerText)">${r.quantity.toFixed(3)}</td>
+      <td>${r.total_price.toLocaleString()}</td>
+      <td contenteditable oninput="updateCell(${i},'remarks',this.innerText)">${r.remarks}</td>
+      <td><button onclick="deleteItem(${i})">❌</button></td>`;
+    tbody.appendChild(tr);
+  });
+  updateTotal();
+}
+
+function updateCell(i, field, val){
+  items[i][field] = val;
+  if(['count','length','width','height','quantity'].includes(field)){
+    const c=safeEval(items[i].count), l=safeEval(items[i].length),
+          w=safeEval(items[i].width), h=safeEval(items[i].height);
+    const q=safeEval(items[i].quantity)||c*l*w*h;
+    items[i].quantity=q;
+    items[i].total_price=items[i].unit_price*q;
+  }
+  renderTable();
+}
+
+function deleteItem(i){ items.splice(i,1); renderTable(); }
+function updateTotal(){
+  const total = items.reduce((s,r)=>s+r.total_price,0);
+  document.getElementById("totalBar").innerText=`جمع کل: ${total.toLocaleString()} ریال`;
+}
+</script>
+</body>
+</html>
